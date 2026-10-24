@@ -15,11 +15,11 @@ private let accent = Color(red: 0.96, green: 0.08, blue: 0.16)
     var body: some Scene { WindowGroup { CameraScreen().preferredColorScheme(.dark).tint(accent) } }
 }
 
-private enum ShootMode: String, CaseIterable, Identifiable {
+enum ShootMode: String, CaseIterable, Identifiable {
     case photo = "FOTO", portrait = "RETRATO", night = "NOITE"
     var id: String { rawValue }
 }
-private enum Lens: String, CaseIterable, Identifiable {
+enum Lens: String, CaseIterable, Identifiable {
     case ultra = "0,5×", one = "1×", two = "2×", three = "3×"
     var id: String { rawValue }
     var factor: CGFloat { switch self { case .ultra: 0.5; case .one: 1; case .two: 2; case .three: 3 } }
