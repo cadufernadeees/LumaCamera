@@ -135,8 +135,13 @@ private enum Lens: String, CaseIterable, Identifiable {
     func setEV(_ ev: Float) {
         exposure = ev
         queue.async { [weak self] in
-            guard let device = self?.device, device.isExposureTargetBiasSupported else { return }
-            do { try device.lockForConfiguration(); device.setExposureTargetBias(ev, completionHandler: nil); device.unlockForConfiguration() } catch { }
+            guard let device = self?.device else { return }
+            do {
+                try device.lockForConfiguration()
+                let bias = min(max(ev, device.minExposureTargetBias), device.maxExposureTargetBias)
+                device.setExposureTargetBias(bias, completionHandler: nil)
+                device.unlockForConfiguration()
+            } catch { }
         }
     }
 
