@@ -18,7 +18,7 @@ O IPA resultante é sem assinatura e não instala diretamente ao tocar nele no i
 
 ## Recursos
 
-- Captura HEIC com prioridade de qualidade.
+- Captura JPEG com prioridade de qualidade.
 - Ajuste computacional leve de cor e nitidez.
 - Retrato computacional com segmentação de pessoa e desfoque de fundo.
 - Zoom de 1×, 1,5×, 2× e 3× pela câmera principal. Os níveis acima de 1× são zoom digital no iPhone 14.
