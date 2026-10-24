@@ -60,7 +60,7 @@ final class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelega
     func capture() {
         guard let photoOutput, !busy else { return }
         busy = true; message = nil
-        let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.heic])
+        let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         settings.photoQualityPrioritization = .quality
         photoOutput.capturePhoto(with: settings, delegate: self)
     }
