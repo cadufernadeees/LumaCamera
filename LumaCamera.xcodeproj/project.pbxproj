@@ -1,0 +1,27 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+		A10000000000000000000001 /* LumaCameraApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaCameraApp.swift; sourceTree = "<group>"; };
+		A10000000000000000000002 /* LumaCamera.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LumaCamera.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000003 /* Sources */ = {isa = PBXGroup; children = (A10000000000000000000001 /* LumaCameraApp.swift */,); path = LumaCamera; sourceTree = "<group>"; };
+		A10000000000000000000004 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000002 /* LumaCamera.app */,); name = Products; sourceTree = "<group>"; };
+		A10000000000000000000005 /* Main group */ = {isa = PBXGroup; children = (A10000000000000000000003 /* Sources */, A10000000000000000000004 /* Products */,); sourceTree = "<group>"; };
+		A10000000000000000000006 /* App target */ = {isa = PBXNativeTarget; buildConfigurationList = A10000000000000000000010; buildPhases = (A10000000000000000000007 /* Sources */, A10000000000000000000008 /* Frameworks */, A10000000000000000000009 /* Resources */,); buildRules = (); dependencies = (); name = LumaCamera; productName = LumaCamera; productReference = A10000000000000000000002; productType = "com.apple.product-type.application"; };
+		A10000000000000000000007 /* Sources phase */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000011 /* LumaCameraApp.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000008 /* Frameworks phase */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000009 /* Resources phase */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000010 /* Target configs */ = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000012, A10000000000000000000013,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000014 /* Project configs */ = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000015, A10000000000000000000016,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000017 /* Project */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 1600; TargetAttributes = {A10000000000000000000006 = {CreatedOnToolsVersion = 16.0;};};}; buildConfigurationList = A10000000000000000000014; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base,); mainGroup = A10000000000000000000005; productRefGroup = A10000000000000000000004; projectDirPath = ""; projectRoot = ""; targets = (A10000000000000000000006,); };
+		A10000000000000000000011 /* Build file */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001; };
+		A10000000000000000000012 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_NSCameraUsageDescription = "Luma usa a câmera para fotografar no aparelho."; INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Luma salva suas fotos na biblioteca Fotos."; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.private.lumacamera; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Debug; };
+		A10000000000000000000013 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_NSCameraUsageDescription = "Luma usa a câmera para fotografar no aparelho."; INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Luma salva suas fotos na biblioteca Fotos."; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait; IPHONEOS_DEPLOYMENT_TARGET = 17.0; MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.private.lumacamera; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Release; };
+		A10000000000000000000015 /* Project Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0;}; name = Debug; };
+		A10000000000000000000016 /* Project Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0;}; name = Release; };
+	};
+	rootObject = A10000000000000000000017;
+}
+
