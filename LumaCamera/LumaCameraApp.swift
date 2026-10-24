@@ -16,7 +16,7 @@ private let accent = Color(red: 0.96, green: 0.08, blue: 0.16)
 }
 
 enum ShootMode: String, CaseIterable, Identifiable {
-    case photo = "FOTO", portrait = "RETRATO", night = "NOITE"
+    case photo = "FOTO", portrait = "RETRATO", night = "NOITE", video = "VÍDEO", cinema = "CINEMA"
     var id: String { rawValue }
 }
 enum Lens: String, CaseIterable, Identifiable {
@@ -25,7 +25,7 @@ enum Lens: String, CaseIterable, Identifiable {
     var factor: CGFloat { switch self { case .ultra: 0.5; case .one: 1; case .two: 2; case .three: 3 } }
 }
 
-@MainActor final class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
+@MainActor final class CameraModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate, AVCaptureFileOutputRecordingDelegate {
     @Published var granted = false
     @Published var running = false
     @Published var busy = false
@@ -36,12 +36,18 @@ enum Lens: String, CaseIterable, Identifiable {
     @Published var flash = false
     @Published var enhance = true
     @Published var simulatedRaw = false
+    @Published var mirrorFront = true
+    @Published var recording = false
+    @Published var showGallery = false
+    @Published var showSettings = false
+    @Published var video4K = true
     @Published var latest: UIImage?
     @Published var note: String?
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "luma.session")
     private let ci = CIContext()
     private let output = AVCapturePhotoOutput()
+    private let movieOutput = AVCaptureMovieFileOutput()
     private var device: AVCaptureDevice?
     private var position: AVCaptureDevice.Position = .back
 
@@ -59,6 +65,14 @@ enum Lens: String, CaseIterable, Identifiable {
         default: note = "Permita acesso à câmera em Ajustes."
         }
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { _ in }
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: configureMicrophone()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] allowed in
+                if allowed { self?.configureMicrophone() }
+            }
+        default: break
+        }
     }
 
     private func configure() {
@@ -77,10 +91,22 @@ enum Lens: String, CaseIterable, Identifiable {
             self.device = camera
             self.session.addInput(input)
             if self.session.canAddOutput(self.output) { self.session.addOutput(self.output) }
+            if self.session.canAddOutput(self.movieOutput) { self.session.addOutput(self.movieOutput) }
             self.output.maxPhotoQualityPrioritization = .quality
             self.session.commitConfiguration()
             self.session.startRunning()
             DispatchQueue.main.async { self.running = true }
+        }
+    }
+
+    private func configureMicrophone() {
+        queue.async { [weak self] in
+            guard let self, !self.session.inputs.contains(where: { ($0 as? AVCaptureDeviceInput)?.device.hasMediaType(.audio) == true }),
+                  let mic = AVCaptureDevice.default(for: .audio),
+                  let input = try? AVCaptureDeviceInput(device: mic), self.session.canAddInput(input) else { return }
+            self.session.beginConfiguration()
+            self.session.addInput(input)
+            self.session.commitConfiguration()
         }
     }
 
@@ -112,6 +138,9 @@ enum Lens: String, CaseIterable, Identifiable {
             guard self.session.canAddInput(input) else { self.session.commitConfiguration(); return }
             self.session.addInput(input); self.device = camera; self.position = next
             self.session.commitConfiguration()
+            if let connection = self.movieOutput.connection(with: .video), connection.isVideoStabilizationSupported {
+                connection.preferredVideoStabilizationMode = .auto
+            }
             DispatchQueue.main.async { self.lens = ultra ? .ultra : .one; self.zoom = ultra ? 0.5 : 1 }
         }
     }
@@ -147,11 +176,39 @@ enum Lens: String, CaseIterable, Identifiable {
 
     func capture() {
         guard running, !busy else { return }
+        guard mode != .video && mode != .cinema else { toggleRecording(); return }
         busy = true; note = nil
         let settings = AVCapturePhotoSettings()
         settings.photoQualityPrioritization = .quality
         if flash && output.supportedFlashModes.contains(.on) { settings.flashMode = .on }
         output.capturePhoto(with: settings, delegate: self)
+    }
+
+    func toggleRecording() {
+        guard running else { return }
+        if movieOutput.isRecording { movieOutput.stopRecording(); return }
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.session.beginConfiguration()
+            self.session.sessionPreset = self.video4K && self.session.canSetSessionPreset(.hd4K3840x2160) ? .hd4K3840x2160 : .hd1920x1080
+            self.session.commitConfiguration()
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("Luma-\(UUID().uuidString).mov")
+            self.movieOutput.startRecording(to: url, recordingDelegate: self)
+            DispatchQueue.main.async { self.recording = true; self.note = self.mode == .cinema ? "Cinema: vídeo estabilizado; desfoque de fundo depende da câmera." : nil }
+        }
+    }
+
+    nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
+        guard error == nil else {
+            Task { @MainActor in self.recording = false; self.note = "Falha ao gravar vídeo. Verifique a permissão do microfone." }
+            return
+        }
+        PHPhotoLibrary.shared().performChanges {
+            PHAssetCreationRequest.forAsset().addResource(with: .video, fileURL: outputFileURL, options: nil)
+        } completionHandler: { [weak self] ok, _ in
+            try? FileManager.default.removeItem(at: outputFileURL)
+            Task { @MainActor in self?.recording = false; self?.note = ok ? "Vídeo salvo em Fotos." : "Permita salvar na biblioteca Fotos." }
+        }
     }
 
     nonisolated func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
@@ -168,6 +225,9 @@ enum Lens: String, CaseIterable, Identifiable {
     private func process(_ image: UIImage) async -> UIImage {
         guard let input = CIImage(image: image) else { return image }
         var result = input
+        if position == .front && mirrorFront {
+            result = result.transformed(by: CGAffineTransform(translationX: result.extent.width, y: 0).scaledBy(x: -1, y: 1))
+        }
         let color = CIFilter.colorControls()
         color.inputImage = result; color.saturation = 1.06
         color.contrast = enhance ? 1.04 : 1
@@ -233,6 +293,8 @@ enum Lens: String, CaseIterable, Identifiable {
         guard let item else { return }
         Task { if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) { latest = image } }
     }
+
+    func setResolution4K(_ value: Bool) { video4K = value }
 }
 
 struct CameraScreen: View {
@@ -277,22 +339,22 @@ struct CameraScreen: View {
             })
             .onAppear { camera.start() }
             .onChange(of: picked) { _, item in camera.importPhoto(item) }
-            .sheet(isPresented: $viewer) {
-                if let image = camera.latest {
-                    ZStack { Color.black.ignoresSafeArea(); Image(uiImage: image).resizable().scaledToFit() }.presentationDetents([.large])
-                }
-            }
+            .sheet(isPresented: $viewer) { GalleryScreen(latest: camera.latest).presentationDetents([.large]) }
+            .sheet(isPresented: $camera.showSettings) { settingsSheet.presentationDetents([.medium, .large]) }
         }
     }
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: "camera.aperture").font(.system(size: 27, weight: .semibold)).foregroundStyle(accent)
+            LumaMark().frame(width: 38, height: 38)
             VStack(alignment: .leading, spacing: 2) {
                 Text("LUMA").font(.system(size: 16, weight: .black, design: .rounded)).tracking(3)
                 Text("CAMERA PRO").font(.system(size: 9, weight: .bold)).tracking(2).foregroundStyle(accent)
             }
             Spacer()
+            Button { camera.showSettings = true } label: {
+                Image(systemName: "slider.horizontal.3").foregroundStyle(.white).frame(width: 40, height: 40).background(.ultraThinMaterial, in: Circle())
+            }
             Button { camera.flash.toggle() } label: {
                 Image(systemName: camera.flash ? "bolt.fill" : "bolt.slash").foregroundStyle(camera.flash ? accent : .white)
                     .frame(width: 40, height: 40).background(.ultraThinMaterial, in: Circle())
@@ -325,18 +387,18 @@ struct CameraScreen: View {
 
     private var shutterRow: some View {
         HStack {
-            PhotosPicker(selection: $picked, matching: .images) {
+            Button { viewer = true } label: {
                 Group {
                     if let image = camera.latest { Image(uiImage: image).resizable().scaledToFill() }
-                    else { Image(systemName: "photo.on.rectangle").font(.system(size: 20)) }
+                    else { Image(systemName: "square.grid.3x3.fill").font(.system(size: 20)) }
                 }.frame(width: 52, height: 52).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
                     .clipShape(RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.7)))
-            }.onTapGesture(count: 2) { viewer = camera.latest != nil }
+            }
             Spacer()
             Button { camera.capture() } label: {
-                Circle().fill(.white).frame(width: 76, height: 76)
-                    .overlay(Circle().stroke(accent, lineWidth: 3).padding(5))
-                    .overlay { if camera.busy { ProgressView().tint(accent) } }
+                Circle().fill(camera.recording ? accent : .white).frame(width: 76, height: 76)
+                    .overlay(Circle().stroke(.white, lineWidth: 3).padding(5))
+                    .overlay { if camera.busy { ProgressView().tint(accent) } else if camera.recording { RoundedRectangle(cornerRadius: 5).fill(.white).frame(width: 22, height: 22) } }
             }.disabled(!camera.running || camera.busy)
             Spacer()
             Button { camera.enhance.toggle() } label: {
@@ -347,7 +409,7 @@ struct CameraScreen: View {
     }
 
     private var modes: some View {
-        HStack(spacing: 27) {
+        ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 22) {
             ForEach(ShootMode.allCases) { mode in
                 Button { camera.mode = mode } label: {
                     Text(mode.rawValue).font(.system(size: 11, weight: .bold)).tracking(1)
@@ -355,7 +417,7 @@ struct CameraScreen: View {
                         .padding(.bottom, 5).overlay(alignment: .bottom) { if camera.mode == mode { Capsule().fill(accent).frame(height: 2) } }
                 }
             }
-        }
+        }.padding(.horizontal, 22) }.frame(maxWidth: .infinity)
     }
 
     private var controls: some View {
@@ -365,6 +427,97 @@ struct CameraScreen: View {
             Text(String(format: "%+.1f", camera.exposure)).font(.system(size: 10, design: .monospaced)).frame(width: 32)
             Button { camera.changeCamera() } label: { Image(systemName: "arrow.triangle.2.circlepath.camera").frame(width: 42, height: 36).background(.ultraThinMaterial, in: Capsule()) }
         }.foregroundStyle(.white).padding(.horizontal, 18)
+    }
+
+    private var settingsSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Imagem") {
+                    Toggle("Aprimoramento inteligente", isOn: $camera.enhance)
+                    Toggle("RAW simulado (TIFF processado)", isOn: $camera.simulatedRaw)
+                    Toggle("Espelhar selfie frontal", isOn: $camera.mirrorFront)
+                }
+                Section("Vídeo") {
+                    Toggle("Gravar em 4K", isOn: $camera.video4K)
+                    Text("Cinema usa estabilização e gravação nativa do iPhone. O iPhone 14 não oferece o desfoque de profundidade Cinema do Pro em vídeo para processamento por este app.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section("Sobre") {
+                    Label("Luma Camera Pro", systemImage: "camera.aperture").foregroundStyle(accent)
+                    Text("Zoom digital não cria detalhes ópticos. RAW simulado é uma imagem TIFF processada, não dados RAW do sensor.").font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Ajustes da câmera")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("OK") { camera.showSettings = false }.tint(accent) } }
+        }.preferredColorScheme(.dark)
+    }
+}
+
+private struct LumaMark: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12).fill(LinearGradient(colors: [Color(red: 1, green: 0.22, blue: 0.28), accent], startPoint: .topLeading, endPoint: .bottomTrailing))
+            Image(systemName: "camera.aperture").font(.system(size: 23, weight: .bold)).foregroundStyle(.white)
+            Circle().fill(.white).frame(width: 4, height: 4)
+        }.shadow(color: accent.opacity(0.42), radius: 8, y: 2)
+    }
+}
+
+private struct GalleryScreen: View {
+    let latest: UIImage?
+    @State private var assets: [PHAsset] = []
+    @State private var selected: UIImage?
+    @State private var accessMessage: String?
+    private let manager = PHImageManager.default()
+    private let columns = [GridItem(.flexible(), spacing: 2), GridItem(.flexible(), spacing: 2), GridItem(.flexible(), spacing: 2)]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 2) {
+                    if let latest { Button { selected = latest } label: { Image(uiImage: latest).resizable().scaledToFill().frame(height: 125).clipped() } }
+                    ForEach(assets, id: \.localIdentifier) { asset in
+                        Button { load(asset, size: CGSize(width: 1000, height: 1000), detail: true) } label: {
+                            AssetThumbnail(asset: asset, manager: manager).frame(height: 125).clipped()
+                        }
+                    }
+                }.padding(2)
+                if let accessMessage { Text(accessMessage).font(.footnote).foregroundStyle(.secondary).padding() }
+            }
+            .background(.black)
+            .navigationTitle("Fotos e vídeos")
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Fechar") { dismiss() }.tint(accent) } }
+            .task { loadAssets() }
+            .fullScreenCover(item: Binding(get: { selected.map(PreviewImage.init) }, set: { selected = $0?.image })) { item in
+                ZStack { Color.black.ignoresSafeArea(); Image(uiImage: item.image).resizable().scaledToFit() }
+                    .onTapGesture { selected = nil }
+            }
+        }.preferredColorScheme(.dark)
+    }
+    @Environment(\.dismiss) private var dismiss
+
+    private func loadAssets() {
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+            DispatchQueue.main.async {
+                guard status == .authorized || status == .limited else { accessMessage = "Permita acesso a Fotos para mostrar sua galeria."; return }
+                let options = PHFetchOptions(); options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+                let result = PHAsset.fetchAssets(with: options)
+                assets = (0..<result.count).map { result.object(at: $0) }
+            }
+        }
+    }
+    private func load(_ asset: PHAsset, size: CGSize, detail: Bool) {
+        manager.requestImage(for: asset, targetSize: size, contentMode: .aspectFit, options: nil) { image, _ in if let image { selected = image } }
+    }
+}
+
+private struct PreviewImage: Identifiable { let id = UUID(); let image: UIImage; init(_ image: UIImage) { self.image = image } }
+private struct AssetThumbnail: View {
+    let asset: PHAsset; let manager: PHImageManager
+    @State private var image: UIImage?
+    var body: some View {
+        Group { if let image { Image(uiImage: image).resizable().scaledToFill() } else { Rectangle().fill(.white.opacity(0.08)) } }
+            .task { manager.requestImage(for: asset, targetSize: CGSize(width: 300, height: 300), contentMode: .aspectFill, options: nil) { result, _ in image = result } }
     }
 }
 
@@ -381,3 +534,4 @@ private final class PreviewView: UIView {
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
     var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
 }
+
